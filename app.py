@@ -26,7 +26,7 @@ login_manager.login_view = 'auth'
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(256), nullable=False)
+    password = db.Column(db.String(512), nullable=False)  # Increased to 512 characters
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     posts = db.relationship('Post', backref='author', lazy=True)
@@ -97,7 +97,7 @@ def auth():
             if User.query.filter_by(username=username).first():
                 flash('Username already exists', 'error')
             else:
-                hashed_password = generate_password_hash(password)
+                hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
                 new_user = User(username=username, password=hashed_password)
                 db.session.add(new_user)
                 db.session.commit()
