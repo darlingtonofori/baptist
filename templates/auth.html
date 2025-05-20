@@ -12,6 +12,7 @@
         </div>
         
         <form id="auth-form" method="POST">
+            <input type="hidden" name="form_type" value="{{ form_type }}">
             <div class="form-group">
                 <input type="text" name="username" placeholder="Username" required>
             </div>
@@ -19,9 +20,32 @@
                 <input type="password" name="password" placeholder="Password" required>
             </div>
             <div class="form-group">
-                <button type="submit" name="{{ form_type }}">{{ form_type|title }}</button>
+                <button type="submit">{{ form_type|title }}</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtns = document.querySelectorAll('.toggle-btn');
+    const form = document.getElementById('auth-form');
+    const formTypeInput = form.querySelector('input[name="form_type"]');
+    
+    toggleBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const formType = this.getAttribute('data-form');
+            formTypeInput.value = formType;
+            
+            // Update active state
+            toggleBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Update button text
+            form.querySelector('button').textContent = formType.charAt(0).toUpperCase() + formType.slice(1);
+        });
+    });
+});
+</script>
 {% endblock %}
