@@ -8,7 +8,7 @@ import uuid
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'dev-secret-key'  # Change in production!
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'dev-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or \
     'postgresql://lebron_user:Hl1Og0nZl15rXjknaywyI3Av92hMyBaJ@dpg-d0ma4ahr0fns73bip9sg-a.oregon-postgres.render.com/lebron'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -26,7 +26,7 @@ login_manager.login_view = 'auth'
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(256), nullable=False)  # Increased from 100 to 256
+    password = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     posts = db.relationship('Post', backref='author', lazy=True)
@@ -65,9 +65,8 @@ def load_user(user_id):
 # Create tables and admin user
 with app.app_context():
     db.create_all()
-    # Create admin user if not exists
     if not User.query.filter_by(username='TR4N5P4R3NT').first():
-        admin_password = os.environ.get('ADMIN_PASSWORD') or 'admin_password'  # Change in production!
+        admin_password = os.environ.get('ADMIN_PASSWORD') or 'admin_password'
         admin = User(
             username='TR4N5P4R3NT',
             password=generate_password_hash(admin_password, method='pbkdf2:sha256', salt_length=8),
@@ -75,8 +74,8 @@ with app.app_context():
         )
         db.session.add(admin)
         db.session.commit()
-# Add these routes if they're missing from your current app.py
 
+# Routes
 @app.route('/')
 def index():
     posts = Post.query.order_by(Post.created_at.desc()).all()
@@ -84,17 +83,183 @@ def index():
 
 @app.route('/auth', methods=['GET', 'POST'])
 def auth():
-    # [Keep your existing auth route implementation]
-    pass
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    form_type = 'login'
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if 'register' in request.form:
+            form_type = 'register'
+            if User.query.filter_by(username=username).first():
+                flash('Username already exists', 'error')
+            else:
+                hashed_password = generate_password_hash(password)
+                new_user = User(username=username, password=hashed_password)
+                db.session.add(new_user)
+                db.session.commit()
+                flash('Registration successful! Please login.', 'success')
+                form_type = 'login'
+        else:
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password, password):
+                login_user(user)
+                next_page = request.args.get('next')
+                return redirect(next_page) if next_page else redirect(url_for('index'))
+            else:
+                flash('Invalid username or password', 'error')
+    
+    return render_template('auth.html', form_type=form_type)
 
 @app.route('/logout')
 @login_required
 def logout():
-    # [Keep your existing logout route implementation]
-    pass
+    logout_user()
+    return redirect(url_for('index'))
 
-# [Keep all your other existing routes]
-# ... [keep all your existing route definitions exactly as they were] ...
+@app.route('/tools')
+def tools():
+    tools = Tool.query.order_by(Tool.created_at.desc()).all()
+    return render_template('tools.html', tools=tools)
+
+@app.route('/post', methods=['POST'])
+@login_required
+def create_post():
+    title = request.form.get('title', '')
+    content = request.form.get('content', '')
+    image = None
+    
+    if 'image' in request.files:
+        file = request.files['image']
+        if file.filename != '':
+            ext = file.filename.split('.')[-1]
+            filename = f"{uuid.uuid4()}.{ext}"
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            image = filename
+    
+    new_post = Post(
+        title=title,
+        content=content,
+        image=image,
+        user_id=current_user.id
+    )
+    db.session.add(new_post)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'post': {
+            'id': new_post.id,
+            'title': new_post.title,
+            'content': new_post.content,
+            'image': new_post.image,
+            'username': current_user.username,
+            'created_at': new_post.created_at.strftime('%Y-%m-%d %H:%M'),
+            'views': new_post.views
+        }
+    })
+
+@app.route('/comment', methods=['POST'])
+@login_required
+def create_comment():
+    post_id = request.form.get('post_id')
+    content = request.form.get('content')
+    
+    post = Post.query.get_or_404(post_id)
+    new_comment = Comment(
+        content=content,
+        user_id=current_user.id,
+        post_id=post.id
+    )
+    db.session.add(new_comment)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'comment': {
+            'id': new_comment.id,
+            'content': new_comment.content,
+            'username': current_user.username,
+            'created_at': new_comment.created_at.strftime('%Y-%m-%d %H:%M')
+        }
+    })
+
+@app.route('/post/<int:post_id>')
+def view_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    post.views += 1
+    db.session.commit()
+    return render_template('post.html', post=post)
+
+@app.route('/add_tool', methods=['POST'])
+@login_required
+def add_tool():
+    name = request.form.get('name')
+    github_url = request.form.get('github_url')
+    description = request.form.get('description')
+    image = None
+    
+    if 'image' in request.files:
+        file = request.files['image']
+        if file.filename != '':
+            ext = file.filename.split('.')[-1]
+            filename = f"{uuid.uuid4()}.{ext}"
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            image = filename
+    
+    new_tool = Tool(
+        name=name,
+        github_url=github_url,
+        description=description,
+        image=image,
+        posted_by=current_user.id
+    )
+    db.session.add(new_tool)
+    db.session.commit()
+    
+    return redirect(url_for('tools'))
+
+# Admin routes
+@app.route('/delete_post/<int:post_id>', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if current_user.is_admin or current_user.id == post.user_id:
+        db.session.delete(post)
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if current_user.is_admin:
+        user = User.query.get_or_404(user_id)
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+# API endpoint for live updates
+@app.route('/api/posts')
+def get_posts():
+    posts = Post.query.order_by(Post.created_at.desc()).all()
+    posts_data = []
+    for post in posts:
+        posts_data.append({
+            'id': post.id,
+            'title': post.title,
+            'content': post.content,
+            'image': post.image,
+            'username': post.author.username,
+            'created_at': post.created_at.strftime('%Y-%m-%d %H:%M'),
+            'views': post.views,
+            'comments_count': len(post.comments)
+        })
+    return jsonify(posts_data)
 
 if __name__ == '__main__':
     app.run(debug=True)
