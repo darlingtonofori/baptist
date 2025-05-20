@@ -75,7 +75,25 @@ with app.app_context():
         )
         db.session.add(admin)
         db.session.commit()
+# Add these routes if they're missing from your current app.py
 
+@app.route('/')
+def index():
+    posts = Post.query.order_by(Post.created_at.desc()).all()
+    return render_template('index.html', posts=posts)
+
+@app.route('/auth', methods=['GET', 'POST'])
+def auth():
+    # [Keep your existing auth route implementation]
+    pass
+
+@app.route('/logout')
+@login_required
+def logout():
+    # [Keep your existing logout route implementation]
+    pass
+
+# [Keep all your other existing routes]
 # ... [keep all your existing route definitions exactly as they were] ...
 
 if __name__ == '__main__':
