@@ -14,7 +14,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://lebron_user:Hl1Og0nZl15rXj
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/images'
 
-db = SQLAlchemy(app)
+# Replace the SQLAlchemy initialization
+db = SQLAlchemy()
+db.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'auth'
 
@@ -57,19 +59,19 @@ class Tool(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-# Create tables (run once)
+#db
 with app.app_context():
     db.create_all()
     # Create admin user if not exists
     if not User.query.filter_by(username='TR4N5P4R3NT').first():
         admin = User(
             username='TR4N5P4R3NT',
-            password=generate_password_hash('admin_password'),  # Change this!
+            password=generate_password_hash('admin_password'),
             is_admin=True
         )
         db.session.add(admin)
         db.session.commit()
+
 @app.route('/auth', methods=['GET', 'POST'])
 def auth():
     if current_user.is_authenticated:
