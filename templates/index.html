@@ -5,14 +5,15 @@
     {% if current_user.is_authenticated %}
     <div class="post-form">
         <h3>Create New Thread</h3>
-        <form id="create-post">
+        <form id="create-post" enctype="multipart/form-data">
             <input type="text" name="title" placeholder="Title (optional)">
             <textarea name="content" placeholder="Your message..." required></textarea>
             <div class="file-upload">
-                <label for="post-image">Upload Image:</label>
-                <input type="file" id="post-image" name="image" accept="image/*">
+                <label for="post-image">Upload Image (PNG, JPG, GIF):</label>
+                <input type="file" id="post-image" name="image" accept="image/png, image/jpeg, image/gif">
             </div>
             <button type="submit">Post</button>
+            <div id="post-error" class="error-message"></div>
         </form>
     </div>
     {% endif %}
@@ -61,4 +62,35 @@
         {% endfor %}
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const postForm = document.getElementById('create-post');
+    if (postForm) {
+        postForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('/post', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear form
+                    this.reset();
+                    // Reload page to show new post
+                    window.location.reload();
+                } else {
+                    document.getElementById('post-error').textContent = data.error || 'Error creating post';
+                }
+            })
+            .catch(error => {
+                document.getElementById('post-error').textContent = 'Error creating post';
+            });
+        });
+    }
+});
+</script>
 {% endblock %}
