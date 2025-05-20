@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="tools-container">
+    {% if current_user.is_authenticated %}
+    <div class="tool-form">
+        <h3>Add New Tool</h3>
+        <form id="add-tool" method="POST" enctype="multipart/form-data" action="{{ url_for('add_tool') }}">
+            <input type="text" name="name" placeholder="Tool Name" required>
+            <input type="url" name="github_url" placeholder="GitHub URL" required>
+            <textarea name="description" placeholder="Description" required></textarea>
+            <div class="file-upload">
+                <label for="tool-image">Upload Image:</label>
+                <input type="file" id="tool-image" name="image" accept="image/*">
+            </div>
+            <button type="submit">Add Tool</button>
+        </form>
+    </div>
+    {% endif %}
+    
+    <div class="tools-list">
+        {% for tool in tools %}
+        <div class="tool">
+            {% if tool.image %}
+            <div class="tool-image">
+                <img src="{{ url_for('static', filename='images/' + tool.image) }}" alt="{{ tool.name }}">
+            </div>
+            {% endif %}
+            <div class="tool-info">
+                <h3>{{ tool.name }}</h3>
+                <p class="tool-description">{{ tool.description }}</p>
+                <a href="{{ tool.github_url }}" target="_blank" class="tool-link">View on GitHub</a>
+                <div class="tool-meta">
+                    <span>Posted by {{ User.query.get(tool.posted_by).username }}</span>
+                    <span>{{ tool.created_at.strftime('%Y-%m-%d') }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

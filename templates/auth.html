@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-box">
+        <div class="auth-header">
+            <h2>WELCOME BAPTIST</h2>
+            <div class="auth-toggle">
+                <button class="toggle-btn {% if form_type == 'login' %}active{% endif %}" data-form="login">Login</button>
+                <button class="toggle-btn {% if form_type == 'register' %}active{% endif %}" data-form="register">Register</button>
+            </div>
+        </div>
+        
+        <form id="auth-form" method="POST">
+            <div class="form-group">
+                <input type="text" name="username" placeholder="Username" required>
+            </div>
+            <div class="form-group">
+                <input type="password" name="password" placeholder="Password" required>
+            </div>
+            <div class="form-group">
+                <button type="submit" name="{{ form_type }}">{{ form_type|title }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

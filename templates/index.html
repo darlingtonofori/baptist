@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="forum-container">
+    {% if current_user.is_authenticated %}
+    <div class="post-form">
+        <h3>Create New Thread</h3>
+        <form id="create-post">
+            <input type="text" name="title" placeholder="Title (optional)">
+            <textarea name="content" placeholder="Your message..." required></textarea>
+            <div class="file-upload">
+                <label for="post-image">Upload Image:</label>
+                <input type="file" id="post-image" name="image" accept="image/*">
+            </div>
+            <button type="submit">Post</button>
+        </form>
+    </div>
+    {% endif %}
+    
+    <div class="posts-list" id="posts-list">
+        {% for post in posts %}
+        <div class="post" data-post-id="{{ post.id }}">
+            <div class="post-header">
+                <span class="post-author">{{ post.author.username }}</span>
+                <span class="post-date">{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% if current_user.is_admin or current_user.id == post.user_id %}
+                <button class="delete-post" data-post-id="{{ post.id }}">×</button>
+                {% endif %}
+            </div>
+            {% if post.title %}
+            <h3 class="post-title">{{ post.title }}</h3>
+            {% endif %}
+            <div class="post-content">{{ post.content }}</div>
+            {% if post.image %}
+            <div class="post-image">
+                <img src="{{ url_for('static', filename='images/' + post.image) }}" alt="Post image">
+            </div>
+            {% endif %}
+            <div class="post-footer">
+                <span class="post-views">👁️ {{ post.views }} views</span>
+                <span class="post-comments-toggle">💬 {{ post.comments|length }} comments</span>
+            </div>
+            <div class="comments-section" style="display: none;">
+                {% for comment in post.comments %}
+                <div class="comment">
+                    <div class="comment-header">
+                        <span class="comment-author">{{ comment.author.username }}</span>
+                        <span class="comment-date">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                    <div class="comment-content">{{ comment.content }}</div>
+                </div>
+                {% endfor %}
+                {% if current_user.is_authenticated %}
+                <form class="add-comment" data-post-id="{{ post.id }}">
+                    <textarea placeholder="Add a comment..." required></textarea>
+                    <button type="submit">Comment</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
