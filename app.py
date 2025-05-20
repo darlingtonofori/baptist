@@ -8,8 +8,9 @@ import uuid
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'  # Change this to a random secret key!
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://lebron_user:Hl1Og0nZl15rXjknaywyI3Av92hMyBaJ@dpg-d0ma4ahr0fns73bip9sg-a.oregon-postgres.render.com/lebron'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'dev-secret-key'  # Change in production!
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or \
+    'postgresql://lebron_user:Hl1Og0nZl15rXjknaywyI3Av92hMyBaJ@dpg-d0ma4ahr0fns73bip9sg-a.oregon-postgres.render.com/lebron'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/images'
 
@@ -17,7 +18,7 @@ app.config['UPLOAD_FOLDER'] = 'static/images'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Initialize extensions
-db = SQLAlchemy()
+db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'auth'
 
@@ -25,7 +26,7 @@ login_manager.login_view = 'auth'
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(256), nullable=False)  # Increased from 100 to 256
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     posts = db.relationship('Post', backref='author', lazy=True)
@@ -61,56 +62,21 @@ class Tool(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Initialize db with app
-db.init_app(app)
-
 # Create tables and admin user
 with app.app_context():
     db.create_all()
+    # Create admin user if not exists
     if not User.query.filter_by(username='TR4N5P4R3NT').first():
+        admin_password = os.environ.get('ADMIN_PASSWORD') or 'admin_password'  # Change in production!
         admin = User(
             username='TR4N5P4R3NT',
-            password=generate_password_hash('admin_password'),  # Change this!
+            password=generate_password_hash(admin_password, method='pbkdf2:sha256', salt_length=8),
             is_admin=True
         )
         db.session.add(admin)
         db.session.commit()
 
-# Routes (keep all your existing route definitions)
-@app.route('/auth', methods=['GET', 'POST'])
-def auth():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    
-    form_type = 'login'  # Default to login form
-    
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        if 'register' in request.form:
-            form_type = 'register'
-            if User.query.filter_by(username=username).first():
-                flash('Username already exists', 'error')
-            else:
-                hashed_password = generate_password_hash(password)
-                new_user = User(username=username, password=hashed_password)
-                db.session.add(new_user)
-                db.session.commit()
-                flash('Registration successful! Please login.', 'success')
-                form_type = 'login'
-        else:
-            user = User.query.filter_by(username=username).first()
-            if user and check_password_hash(user.password, password):
-                login_user(user)
-                next_page = request.args.get('next')
-                return redirect(next_page) if next_page else redirect(url_for('index'))
-            else:
-                flash('Invalid username or password', 'error')
-    
-    return render_template('auth.html', form_type=form_type)
-
-# ... (keep all your other route definitions exactly as you had them)
+# ... [keep all your existing route definitions exactly as they were] ...
 
 if __name__ == '__main__':
     app.run(debug=True)
