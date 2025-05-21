@@ -19,24 +19,78 @@
     {% endif %}
     
     <div class="posts-list" id="posts-list">
-        {% if not posts %}
-            <div class="no-posts">No posts yet. Be the first to post!</div>
-        {% else %}
-            {% for post in posts %}
-            <div class="post" data-post-id="{{ post.id }}">
-                <!-- Your existing post template -->
+        {% for post in posts %}
+        <div class="post" data-post-id="{{ post.id }}">
+            <div class="post-header">
+                <span class="post-author">{{ post.author.username }}</span>
+                <span class="post-date">{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% if current_user.is_admin or current_user.id == post.user_id %}
+                <button class="delete-post" data-post-id="{{ post.id }}">×</button>
+                {% endif %}
             </div>
-            {% endfor %}
-        {% endif %}
+            {% if post.title %}
+            <h3 class="post-title">{{ post.title }}</h3>
+            {% endif %}
+            <div class="post-content">{{ post.content }}</div>
+            {% if post.image %}
+            <div class="post-image">
+                <img src="{{ url_for('static', filename='images/' + post.image) }}" alt="Post image">
+            </div>
+            {% endif %}
+            <div class="post-footer">
+                <span class="post-views">👁️ {{ post.views }} views</span>
+                <span class="post-comments-toggle">💬 {{ post.comments|length }} comments</span>
+            </div>
+            <div class="comments-section" style="display: none;">
+                {% for comment in post.comments %}
+                <div class="comment">
+                    <div class="comment-header">
+                        <span class="comment-author">{{ comment.author.username }}</span>
+                        <span class="comment-date">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                    <div class="comment-content">{{ comment.content }}</div>
+                </div>
+                {% endfor %}
+                {% if current_user.is_authenticated %}
+                <form class="add-comment" data-post-id="{{ post.id }}">
+                    <textarea placeholder="Add a comment..." required></textarea>
+                    <button type="submit">Comment</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
 <script>
-const CURRENT_USER = {
-    is_authenticated: {{ 'true' if current_user.is_authenticated else 'false' }},
-    is_admin: {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }},
-    id: {{ current_user.id if current_user.is_authenticated else 'null' }}
-};
+document.addEventListener('DOMContentLoaded', function() {
+    const postForm = document.getElementById('create-post');
+    if (postForm) {
+        postForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('/post', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear form
+                    this.reset();
+                    // Reload page to show new post
+                    window.location.reload();
+                } else {
+                    document.getElementById('post-error').textContent = data.error || 'Error creating post';
+                }
+            })
+            .catch(error => {
+                document.getElementById('post-error').textContent = 'Error creating post';
+            });
+        });
+    }
+});
 </script>
-<script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
 {% endblock %}
