@@ -65,6 +65,57 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Current user data
+    const CURRENT_USER = {
+        is_authenticated: {{ 'true' if current_user.is_authenticated else 'false' }},
+        is_admin: {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }},
+        id: {{ current_user.id if current_user.is_authenticated else 'null' }}
+    };
+
+    // Real-time updates
+    const eventSource = new EventSource('/stream');
+    const postsContainer = document.getElementById('posts-list');
+    
+    eventSource.onmessage = function(e) {
+        const post = JSON.parse(e.data);
+        
+        // Check if post already exists
+        if (!document.querySelector(`[data-post-id="${post.id}"]`)) {
+            const canDelete = CURRENT_USER.is_authenticated && 
+                           (CURRENT_USER.is_admin || CURRENT_USER.id === post.user_id);
+            
+            const postHTML = `
+            <div class="post" data-post-id="${post.id}">
+                <div class="post-header">
+                    <span class="post-author">${post.username}</span>
+                    <span class="post-date">${post.created_at}</span>
+                    ${canDelete ? `<button class="delete-post" data-post-id="${post.id}">×</button>` : ''}
+                </div>
+                ${post.title ? `<h3 class="post-title">${post.title}</h3>` : ''}
+                <div class="post-content">${post.content}</div>
+                ${post.image ? `
+                <div class="post-image">
+                    <img src="/static/images/${post.image}" alt="Post image">
+                </div>` : ''}
+                <div class="post-footer">
+                    <span class="post-views">👁️ ${post.views} views</span>
+                    <span class="post-comments-toggle">💬 ${post.comments_count} comments</span>
+                </div>
+                <div class="comments-section" style="display: none;">
+                    ${CURRENT_USER.is_authenticated ? `
+                    <form class="add-comment" data-post-id="${post.id}">
+                        <textarea placeholder="Add a comment..." required></textarea>
+                        <button type="submit">Comment</button>
+                    </form>` : ''}
+                </div>
+            </div>`;
+            
+            postsContainer.insertAdjacentHTML('afterbegin', postHTML);
+            setupPostInteractions(postsContainer.firstChild);
+        }
+    };
+
+    // Post form submission (keep your existing code)
     const postForm = document.getElementById('create-post');
     if (postForm) {
         postForm.addEventListener('submit', function(e) {
@@ -78,10 +129,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Clear form
                     this.reset();
-                    // Reload page to show new post
-                    window.location.reload();
+                    // No longer need to reload since we have real-time updates
                 } else {
                     document.getElementById('post-error').textContent = data.error || 'Error creating post';
                 }
@@ -91,6 +140,61 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // Setup interactions for new posts
+    function setupPostInteractions(postElement) {
+        // Toggle comments
+        postElement.querySelector('.post-comments-toggle').addEventListener('click', function() {
+            const commentsSection = postElement.querySelector('.comments-section');
+            commentsSection.style.display = commentsSection.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Delete post
+        const deleteBtn = postElement.querySelector('.delete-post');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete this post?')) {
+                    fetch(`/delete_post/${this.dataset.postId}`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            postElement.remove();
+                        }
+                    });
+                }
+            });
+        }
+
+        // Add comment
+        const commentForm = postElement.querySelector('.add-comment');
+        if (commentForm) {
+            commentForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const content = this.querySelector('textarea').value;
+                
+                fetch('/comment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `post_id=${this.dataset.postId}&content=${encodeURIComponent(content)}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.querySelector('textarea').value = '';
+                    }
+                });
+            });
+        }
+    }
+
+    // Initialize interactions for existing posts
+    document.querySelectorAll('.post').forEach(post => {
+        setupPostInteractions(post);
+    });
 });
 </script>
 {% endblock %}
