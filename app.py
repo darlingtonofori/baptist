@@ -1,10 +1,12 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+import time
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import uuid
+import json
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -26,7 +28,7 @@ login_manager.login_view = 'auth'
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(512), nullable=False)  # Increased to 512 characters
+    password = db.Column(db.String(512), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     posts = db.relationship('Post', backref='author', lazy=True)
@@ -135,32 +137,71 @@ def create_post():
     if 'image' in request.files:
         file = request.files['image']
         if file.filename != '':
-            ext = file.filename.split('.')[-1]
+            # Validate file type
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+            ext = file.filename.split('.')[-1].lower()
+            if ext not in allowed_extensions:
+                return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+            
             filename = f"{uuid.uuid4()}.{ext}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            image = filename
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            try:
+                file.save(file_path)
+                image = filename
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
     
-    new_post = Post(
-        title=title,
-        content=content,
-        image=image,
-        user_id=current_user.id
-    )
-    db.session.add(new_post)
-    db.session.commit()
+    if not content:
+        return jsonify({'success': False, 'error': 'Content is required'}), 400
     
-    return jsonify({
-        'success': True,
-        'post': {
-            'id': new_post.id,
-            'title': new_post.title,
-            'content': new_post.content,
-            'image': new_post.image,
-            'username': current_user.username,
-            'created_at': new_post.created_at.strftime('%Y-%m-%d %H:%M'),
-            'views': new_post.views
-        }
-    })
+    try:
+        new_post = Post(
+            title=title,
+            content=content,
+            image=image,
+            user_id=current_user.id
+        )
+        db.session.add(new_post)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'post': {
+                'id': new_post.id,
+                'title': new_post.title,
+                'content': new_post.content,
+                'image': new_post.image,
+                'username': current_user.username,
+                'created_at': new_post.created_at.strftime('%Y-%m-%d %H:%M'),
+                'views': new_post.views
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/stream')
+def stream():
+    def event_stream():
+        last_id = Post.query.order_by(Post.id.desc()).first().id if Post.query.count() > 0 else 0
+        while True:
+            # Check for new posts
+            new_posts = Post.query.filter(Post.id > last_id).order_by(Post.created_at.asc()).all()
+            for post in new_posts:
+                last_id = post.id
+                data = {
+                    'id': post.id,
+                    'title': post.title,
+                    'content': post.content,
+                    'image': post.image,
+                    'username': post.author.username,
+                    'created_at': post.created_at.strftime('%Y-%m-%d %H:%M'),
+                    'views': post.views
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+            time.sleep(1)  # Check every second
+    
+    return Response(event_stream(), mimetype="text/event-stream")
 
 @app.route('/comment', methods=['POST'])
 @login_required
