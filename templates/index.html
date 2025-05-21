@@ -80,9 +80,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="post-header">
                 <span class="post-author">${post.username}</span>
                 <span class="post-date">${post.created_at}</span>
-                {% if current_user.is_admin or current_user.id == post.user_id %}
-                <button class="delete-post" data-post-id="${post.id}">×</button>
-                {% endif %}
+             {% if current_user.is_authenticated and (current_user.is_admin or current_user.id == post.user_id) %}
+<button class="delete-post" data-post-id="{{ post.id }}">×</button>
+{% endif %}
             </div>
             ${post.title ? `<h3 class="post-title">${post.title}</h3>` : ''}
             <div class="post-content">${post.content}</div>
